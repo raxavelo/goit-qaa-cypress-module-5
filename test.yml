@@ -1,0 +1,54 @@
+config:
+  target: "https://jsonplaceholder.typicode.com"
+  phases:
+    - duration: 30
+      arrivalRate: 2
+      name: "Warm-up phase"
+    - duration: 60
+      arrivalRate: 5
+      rampTo: 10
+      name: "Stress phase"
+
+  payload:
+    path: "./data.csv"
+    fields:
+      - userId
+      - title
+      - body
+    order: sequence
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  plugins:
+    ensure: {}
+
+  ensure:
+    thresholds:
+      - http.response_time.p95: 1000
+    conditions:
+      - expression: vusers.failed == 0
+      - expression: "http.request_rate >= 2 and http.response_time.max < 600"
+
+scenarios:
+  - flow:
+      - get:
+          url: "/posts/1"
+          capture:
+            - json: "$.userId"
+              as: "capturedUserId"
+
+      - post:
+          url: "/posts"
+          json:
+            userId: "{{ userId }}"
+            title: "{{ title }}"
+            body: "{{ body }}"
+          expect:
+            statusCode: 201
+
+      - get:
+          url: "/posts"
+          expect:
+            statusCode: 200
